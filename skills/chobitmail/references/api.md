@@ -6,6 +6,27 @@ Format: JSON request/response
 
 API keys are issued in the dashboard (GitHub login). Plaintext is shown once at creation. Up to **2 keys per team** (disabled keys count). Keys and inboxes are **team-scoped**: any active key on the same team can create/read the same inboxes.
 
+## GET /api/inboxes
+
+List **active** (not expired) inboxes for the team, newest first. Expired/deleted are omitted.
+
+**200:**
+
+```json
+{
+  "inboxes": [
+    {
+      "id": "v56m2aq5ly17piq3",
+      "address": "v56m2aq5ly17piq3@chobitmail.com",
+      "createdAt": "2026-07-17T07:30:00.000Z",
+      "expiresAt": "2026-07-17T07:40:00.000Z"
+    }
+  ]
+}
+```
+
+Empty list when none active: `{ "inboxes": [] }`. Same object shape as create.
+
 ## POST /api/inboxes
 
 Create a disposable address.
@@ -13,12 +34,12 @@ Create a disposable address.
 **Body (optional):**
 
 ```json
-{ "ttl": 300 }
+{ "ttl": 600 }
 ```
 
 | Field | Type | Rules |
 |-------|------|--------|
-| `ttl` | number | Seconds. Clamped to **60–300**. Default **300**. |
+| `ttl` | number | Seconds. Clamped to **60–600**. Default **600**. |
 
 **201:**
 
@@ -27,7 +48,7 @@ Create a disposable address.
   "id": "v56m2aq5ly17piq3",
   "address": "v56m2aq5ly17piq3@chobitmail.com",
   "createdAt": "2026-07-17T07:30:00.000Z",
-  "expiresAt": "2026-07-17T07:35:00.000Z"
+  "expiresAt": "2026-07-17T07:40:00.000Z"
 }
 ```
 
@@ -71,6 +92,11 @@ Multiple filters are AND. Non-matching mail is stored but does not resolve the w
 **429:** `{ "error": "tooManyWaiters" }` — >10 concurrent waiters on this inbox  
 
 Overall test wait = loop of wait calls until wall-clock deadline.
+
+## DELETE /api/inboxes
+
+Destroy **all** active inboxes for the team. **204** empty body (also when zero).  
+Use to free concurrent quota in one call or clean up after a test suite.
 
 ## DELETE /api/inboxes/:id
 
@@ -116,11 +142,11 @@ Optional: TTL already cleans up; call early to free concurrent quota.
 
 | Limit | Value |
 |-------|--------|
-| Concurrent active inboxes | 1 |
-| Inbox creates / day (UTC) | 5 |
-| Messages received / day (UTC) | 5 |
+| Concurrent active inboxes | 1 (2 with verified sender domain) |
+| Inbox creates / day (UTC) | 5 (50 when verified) |
+| Messages received / day (UTC) | 5 (50 when verified) |
 | API keys per team (incl. disabled) | 2 |
-| Inbox TTL | 60s–5m (default 5m) |
+| Inbox TTL | 60s–10m (default 10m) |
 | Messages stored per inbox | 50 (further mail dropped) |
 | Max message size | 1 MB (larger discarded) |
 | Max single wait | 30s |

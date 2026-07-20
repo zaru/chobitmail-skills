@@ -47,7 +47,7 @@ Do **not** use chobitmail as a personal mailbox or for production user mail.
 2. Drive app with address     → signup form, "forgot password", etc.
 3. GET  .../messages/wait     → reconnect on 408 until mail or deadline
 4. Use message.codes / links  → no HTML parsing required
-5. Optional DELETE /api/inboxes/:id  (TTL auto-deletes otherwise)
+5. Optional DELETE /api/inboxes/:id or DELETE /api/inboxes  (TTL auto-deletes otherwise)
 ```
 
 ```bash
@@ -57,7 +57,7 @@ export BASE=https://chobitmail.com
 curl -s -X POST "$BASE/api/inboxes" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"ttl":300}'
+  -d '{"ttl":600}'
 # → {"id":"...","address":"...@chobitmail.com",...}
 
 curl -s "$BASE/api/inboxes/<id>/messages/wait?timeout=25&subject=verify" \
@@ -71,8 +71,8 @@ curl -s "$BASE/api/inboxes/<id>/messages/wait?timeout=25&subject=verify" \
 1. **Always implement wait reconnect.** Each wait call lasts at most 30s (`timeout` 1–30, default 25). On **408**, call wait again until your test deadline. Do not treat 408 as a failed test.
 2. **Prefer wait over list.** `GET .../messages` returns immediately (may be empty). Tests should use `.../messages/wait`.
 3. **Use server-side extraction.** Prefer `codes` (4–8 digit OTPs) and `links` over scraping `html`/`text`.
-4. **TTL is short.** Requested `ttl` is clamped to **60–300 seconds** (default 300). Long E2E runs must finish within TTL or recreate the inbox.
-5. **Free-tier quotas are tight.** Concurrent active inboxes: **1**. Creates/day: **5**. Messages received/day: **5** (UTC). For parallel suites, serialize mail-dependent tests or delete inboxes early.
+4. **TTL is short.** Requested `ttl` is clamped to **60–600 seconds** (default 600). Long E2E runs must finish within TTL or recreate the inbox.
+5. **Free-tier quotas are tight.** Concurrent active inboxes: **1** (or **2** with a verified sender domain). Creates/day: **5** (50 when verified). Messages received/day: **5** (50 when verified, UTC). For parallel suites, serialize mail-dependent tests or delete inboxes early.
 6. **404 is intentional ambiguity.** Missing, expired, and other-tenant IDs all return 404. Most test 404s mean TTL expired.
 7. **Same-team keys share inboxes.** Keys and inboxes are team-scoped; rotation is safe once CI uses the new key.
 
@@ -82,7 +82,7 @@ curl -s "$BASE/api/inboxes/<id>/messages/wait?timeout=25&subject=verify" \
 const BASE = process.env.CHOBITMAIL_BASE_URL ?? "https://chobitmail.com";
 const AUTH = { Authorization: `Bearer ${process.env.CHOBITMAIL_API_KEY}` };
 
-export async function createInbox(ttl = 300) {
+export async function createInbox(ttl = 600) {
   const res = await fetch(`${BASE}/api/inboxes`, {
     method: "POST",
     headers: { ...AUTH, "Content-Type": "application/json" },
@@ -113,8 +113,21 @@ export async function waitForMessage(inboxId, params = {}, maxWaitMs = 120_000) 
   throw new Error("email did not arrive before deadline");
 }
 
+export async function listInboxes() {
+  const res = await fetch(`${BASE}/api/inboxes`, { headers: AUTH });
+  if (!res.ok) throw new Error(`listInboxes ${res.status}: ${await res.text()}`);
+  return (await res.json()).inboxes;
+}
+
 export async function deleteInbox(inboxId) {
   await fetch(`${BASE}/api/inboxes/${inboxId}`, {
+    method: "DELETE",
+    headers: AUTH,
+  });
+}
+
+export async function deleteAllInboxes() {
+  await fetch(`${BASE}/api/inboxes`, {
     method: "DELETE",
     headers: AUTH,
   });
@@ -141,7 +154,9 @@ test("signup OTP", async ({ page }) => {
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `POST` | `/api/inboxes` | Body optional `{ "ttl": 60–300 }`. **201** |
+| `GET` | `/api/inboxes` | Active inboxes for the team. **200** `{ inboxes: [...] }` |
+| `POST` | `/api/inboxes` | Body optional `{ "ttl": 60–600 }`. **201** |
+| `DELETE` | `/api/inboxes` | Destroy all active inboxes. **204** |
 | `GET` | `/api/inboxes/:id/messages` | Immediate list (oldest first). **200** |
 | `GET` | `/api/inboxes/:id/messages/wait` | Query: `timeout`, `from` (exact), `subject` (substring). Filters AND. |
 | `DELETE` | `/api/inboxes/:id` | Immediate destroy. **204** |
@@ -173,8 +188,8 @@ test("signup OTP", async ({ page }) => {
 |---------|-----|
 | Treating 408 as test failure | Loop until overall deadline |
 | Parsing HTML for OTP | Use `message.codes` |
-| `ttl: 600` expecting 10 minutes | Clamped to 300s max |
-| Parallel mail tests on free tier | One concurrent inbox — serialize |
+| `ttl: 3600` expecting 1 hour | Clamped to 600s max |
+| Parallel mail tests on free tier | 1 concurrent inbox (2 if domain verified) — serialize or verify domain |
 | Sharing one inbox across tests | Creates cross-talk; one inbox per test |
 | Committing API keys | Env var / CI secret only |
 

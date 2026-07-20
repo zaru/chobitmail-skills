@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 import { createInbox, waitForMessage } from "./chobitmail";
 
 test("email OTP signup", async ({ page }) => {
-  const inbox = await createInbox(300);
+  const inbox = await createInbox(600);
 
   await page.goto("https://app.example/signup");
   await page.getByLabel("Email").fill(inbox.address);
@@ -116,7 +116,7 @@ env:
 ```
 
 - Do not print the key in logs.
-- Free tier: **1 concurrent inbox**, **5 creates/day**, **5 messages/day**. Keep mail-dependent jobs serial and few.
+- Free tier: **1 concurrent inbox** (2 with verified sender domain), **5 creates/day**, **5 messages/day** (higher when verified). Keep mail-dependent jobs serial and few unless domain-verified.
 - Prefer deleting inboxes in `afterEach` / `finally` when running many sequential tests so concurrent quota frees immediately.
 - Key rotation: create new key in dashboard → update secret → delete old key.
 
@@ -148,7 +148,7 @@ Production domain for real mail delivery is `https://chobitmail.com` (not local)
 | Create returns 429 concurrent | Another active inbox; DELETE it or wait TTL |
 | Create returns 429 daily | Hit daily create cap (UTC day) |
 | Wait always 408 then deadline | App never sent; wrong filter; spam/delay; receive quota exhausted |
-| 404 after long test | TTL 5m max — shorten test or re-create earlier |
+| 404 after long test | TTL 10m max — shorten test or re-create earlier |
 | Empty `codes` | Code not 4–8 digits, or only inside a URL |
 | Empty `links` | Link only in image / unusual format |
 | OTP wrong | Multiple codes — pick by length or message context, not always `[0]` if ambiguous |
