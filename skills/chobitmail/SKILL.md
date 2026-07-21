@@ -72,7 +72,7 @@ curl -s "$BASE/api/inboxes/<id>/messages/wait?timeout=25&subject=verify" \
 2. **Prefer wait over list.** `GET .../messages` returns immediately (may be empty). Tests should use `.../messages/wait`.
 3. **Use server-side extraction.** Prefer `codes` (4–8 digit OTPs) and `links` over scraping `html`/`text`.
 4. **TTL is short.** Requested `ttl` is clamped to **60–600 seconds** (default 600). Long E2E runs must finish within TTL or recreate the inbox.
-5. **Free-tier quotas are tight.** Concurrent active inboxes: **1** (or **2** with a verified sender domain). Creates/day: **5** (50 when verified). Messages received/day: **5** (50 when verified, UTC). For parallel suites, serialize mail-dependent tests or delete inboxes early.
+5. **Free-tier quotas are tight.** Concurrent active inboxes: **1** (or **2** with a verified sender domain). Creates/day: **5** (50 when verified). Messages received/day: **5** (50 when verified, UTC). For parallel suites, serialize mail-dependent tests or delete inboxes early. Inspect remaining quota with **`GET /api/usage`** (`unlimited` / `*.limit` null means no cap).
 6. **404 is intentional ambiguity.** Missing, expired, and other-tenant IDs all return 404. Most test 404s mean TTL expired.
 7. **Same-team keys share inboxes.** Keys and inboxes are team-scoped; rotation is safe once CI uses the new key.
 
@@ -132,6 +132,14 @@ export async function deleteAllInboxes() {
     headers: AUTH,
   });
 }
+
+/** Free-tier usage for the key's team. limit is null when unlimited. */
+export async function getUsage() {
+  const res = await fetch(`${BASE}/api/usage`, { headers: AUTH });
+  if (!res.ok) throw new Error(`getUsage ${res.status}: ${await res.text()}`);
+  return res.json();
+  // { teamId, unlimited, verified, concurrent, dailyInboxes, dailyMessages }
+}
 ```
 
 ### Playwright example
@@ -160,6 +168,7 @@ test("signup OTP", async ({ page }) => {
 | `GET` | `/api/inboxes/:id/messages` | Immediate list (oldest first). **200** |
 | `GET` | `/api/inboxes/:id/messages/wait` | Query: `timeout`, `from` (exact), `subject` (substring). Filters AND. |
 | `DELETE` | `/api/inboxes/:id` | Immediate destroy. **204** |
+| `GET` | `/api/usage` | Team quota usage. **200** `{ unlimited, concurrent, dailyInboxes, dailyMessages, ... }` |
 
 ### Message fields agents care about
 
