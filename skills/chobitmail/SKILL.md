@@ -166,7 +166,7 @@ test("signup OTP", async ({ page }) => {
 | `POST` | `/api/inboxes` | Body optional `{ "ttl": 60–600 }`. **201** |
 | `DELETE` | `/api/inboxes` | Destroy all active inboxes. **204** |
 | `GET` | `/api/inboxes/:id/messages` | Immediate list (oldest first). **200** |
-| `GET` | `/api/inboxes/:id/messages/wait` | Query: `timeout`, `from` (exact), `subject` (substring). Filters AND. |
+| `GET` | `/api/inboxes/:id/messages/wait` | Query: `timeout`, `from` (exact), `subject` (substring), `timestamp_from` / `timestamp_to` (Unix ms). Filters AND. |
 | `DELETE` | `/api/inboxes/:id` | Immediate destroy. **204** |
 | `GET` | `/api/usage` | Team quota usage. **200** `{ unlimited, concurrent, dailyInboxes, dailyMessages, ... }` |
 

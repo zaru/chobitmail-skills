@@ -84,6 +84,8 @@ Block until a matching message exists or timeout.
 | `timeout` | Seconds to hold connection. **1–30**, default **25** |
 | `from` | Exact match on envelope sender |
 | `subject` | Substring match on subject |
+| `timestamp_from` | Lower bound on `receivedAt` (Unix ms, inclusive) |
+| `timestamp_to` | Upper bound on `receivedAt` (Unix ms, inclusive) |
 
 Multiple filters are AND. Non-matching mail is stored but does not resolve the wait.
 
