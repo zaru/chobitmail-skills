@@ -13,15 +13,15 @@ metadata:
   author: zaru
   homepage: https://chobitmail.com
   docs: https://chobitmail.com
-  source: https://github.com/zaru/chobitmail-skills
-  install: npx skills add zaru/chobitmail-skills
+  source: https://github.com/chobitapp/chobitmail-skills
+  install: npx skills add chobitapp/chobitmail-skills
 ---
 
 # chobitmail
 
 Disposable email API for automated tests and agents. Base URL: `https://chobitmail.com`.
 
-**Install this skill:** `npx skills add zaru/chobitmail-skills`  
+**Install this skill:** `npx skills add chobitapp/chobitmail-skills`  
 (Public mirror of monorepo `skills/chobitmail`; product source stays private.)
 
 **Auth:** every request needs `Authorization: Bearer <API_KEY>`.
@@ -71,12 +71,40 @@ curl -s "$BASE/api/inboxes/<id>/messages/wait?timeout=25&subject=verify" \
 1. **Always implement wait reconnect.** Each wait call lasts at most 30s (`timeout` 1–30, default 25). On **408**, call wait again until your test deadline. Do not treat 408 as a failed test.
 2. **Prefer wait over list.** `GET .../messages` returns immediately (may be empty). Tests should use `.../messages/wait`.
 3. **Use server-side extraction.** Prefer `codes` (4–8 digit OTPs) and `links` over scraping `html`/`text`.
-4. **TTL is short.** Requested `ttl` is clamped to **60–600 seconds** (default 600). Long E2E runs must finish within TTL or recreate the inbox.
-5. **Free-tier quotas are tight.** Concurrent active inboxes: **1** (or **2** with a verified sender domain). Creates/day: **5** (50 when verified). Messages received/day: **5** (50 when verified, UTC). For parallel suites, serialize mail-dependent tests or delete inboxes early. Inspect remaining quota with **`GET /api/usage`** (`unlimited` / `*.limit` null means no cap).
+4. **TTL depends on plan.** Free: clamped to **60–600s** (default 600). Pro: **60–86400s** (default 3600). Long free-tier E2E must finish within TTL or recreate the inbox.
+5. **Free-tier quotas are tight.** Concurrent: **1** (or **2** with a verified sender domain). Creates/day: **5** (50 when verified). Messages/day: **5** (100 when verified, UTC). Pro: concurrent **50**, no daily hard caps. Inspect **`GET /api/usage`** (`plan`, `complimentaryPro`, `*.limit` null = no daily cap).
 6. **404 is intentional ambiguity.** Missing, expired, and other-tenant IDs all return 404. Most test 404s mean TTL expired.
 7. **Same-team keys share inboxes.** Keys and inboxes are team-scoped; rotation is safe once CI uses the new key.
 
+## Preferred: official Playwright package
+
+For Playwright E2E, prefer **`@chobitmail/playwright`** over copy-paste helpers:
+
+```bash
+pnpm add -D @chobitmail/playwright
+export CHOBITMAIL_API_KEY=cbm_live_...
+```
+
+```ts
+import { test, expect } from "@chobitmail/playwright";
+
+test("signup OTP", async ({ page, inbox }) => {
+  await page.goto("/signup");
+  await page.getByLabel("Email").fill(inbox.address);
+  // trigger send...
+  const code = await inbox.waitForCode({ subject: "verification" });
+  await page.getByLabel(/code|otp/i).fill(code);
+});
+```
+
+- Auto create/delete per test; 408 reconnect is built-in.
+- Free tier: concurrent **1**, daily creates/messages **5** (verified: concurrent **2**, creates **50**, messages **100**) — see package README.
+- Source mirror: [chobitapp/chobitmail-playwright](https://github.com/chobitapp/chobitmail-playwright)
+- Cypress is **not** supported.
+
 ## Node helper (copy into tests)
+
+Use when not on Playwright (Vitest, agents, etc.).
 
 ```js
 const BASE = process.env.CHOBITMAIL_BASE_URL ?? "https://chobitmail.com";
@@ -133,12 +161,12 @@ export async function deleteAllInboxes() {
   });
 }
 
-/** Free-tier usage for the key's team. limit is null when unlimited. */
+/** Plan and quota usage for the key's team. daily limit null = no hard daily cap. */
 export async function getUsage() {
   const res = await fetch(`${BASE}/api/usage`, { headers: AUTH });
   if (!res.ok) throw new Error(`getUsage ${res.status}: ${await res.text()}`);
   return res.json();
-  // { teamId, unlimited, verified, concurrent, dailyInboxes, dailyMessages }
+  // { teamId, plan, complimentaryPro, verified, concurrent, dailyInboxes, dailyMessages, ttl, ... }
 }
 ```
 
@@ -163,12 +191,12 @@ test("signup OTP", async ({ page }) => {
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/api/inboxes` | Active inboxes for the team. **200** `{ inboxes: [...] }` |
-| `POST` | `/api/inboxes` | Body optional `{ "ttl": 60–600 }`. **201** |
+| `POST` | `/api/inboxes` | Body optional `{ "ttl": … }` (Free 60–600, Pro 60–86400). **201** |
 | `DELETE` | `/api/inboxes` | Destroy all active inboxes. **204** |
 | `GET` | `/api/inboxes/:id/messages` | Immediate list (oldest first). **200** |
 | `GET` | `/api/inboxes/:id/messages/wait` | Query: `timeout`, `from` (exact), `subject` (substring), `timestamp_from` / `timestamp_to` (Unix ms). Filters AND. |
 | `DELETE` | `/api/inboxes/:id` | Immediate destroy. **204** |
-| `GET` | `/api/usage` | Team quota usage. **200** `{ unlimited, concurrent, dailyInboxes, dailyMessages, ... }` |
+| `GET` | `/api/usage` | Team quota usage. **200** `{ plan, complimentaryPro, concurrent, dailyInboxes, dailyMessages, ttl, ... }` |
 
 ### Message fields agents care about
 
@@ -197,7 +225,7 @@ test("signup OTP", async ({ page }) => {
 |---------|-----|
 | Treating 408 as test failure | Loop until overall deadline |
 | Parsing HTML for OTP | Use `message.codes` |
-| `ttl: 3600` expecting 1 hour | Clamped to 600s max |
+| `ttl: 3600` on Free | Clamped to 600s; need Pro for 1h |
 | Parallel mail tests on free tier | 1 concurrent inbox (2 if domain verified) — serialize or verify domain |
 | Sharing one inbox across tests | Creates cross-talk; one inbox per test |
 | Committing API keys | Env var / CI secret only |

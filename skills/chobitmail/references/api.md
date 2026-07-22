@@ -107,28 +107,31 @@ Optional: TTL already cleans up; call early to free concurrent quota.
 
 ## GET /api/usage
 
-Read free-tier usage for the API key's team. Useful in E2E to see remaining quota and whether the team is unlimited.
+Read plan and quota usage for the API key's team. Useful in E2E to see remaining quota and whether the team is Pro.
 
 **200:**
 
 ```json
 {
   "teamId": "v56m2aq5ly17piq3",
-  "unlimited": false,
+  "plan": "free",
+  "complimentaryPro": false,
   "verified": false,
   "concurrent": { "used": 1, "limit": 1 },
   "dailyInboxes": { "used": 3, "limit": 5 },
-  "dailyMessages": { "used": 2, "limit": 5 }
+  "dailyMessages": { "used": 2, "limit": 5 },
+  "ttl": { "defaultSeconds": 600, "maxSeconds": 600 },
+  "maxDomains": 1,
+  "maxApiKeys": 2
 }
 ```
 
 | Field | Notes |
 |-------|--------|
-| `unlimited` | `true` when the team bypasses free-tier caps (ops allowlist) |
-| `verified` | `true` when at least one verified sender domain (higher tier limits) |
-| `*.limit` | Number, or `null` when unlimited |
-
-When `unlimited` is `true`, all three `limit` values are `null`.
+| `plan` | `"free"` or `"pro"` (pro currently via complimentary `PRO_TEAM_IDS` only) |
+| `complimentaryPro` | `true` when Pro limits are granted free via allowlist |
+| `verified` | `true` when at least one verified sender domain (higher free-tier limits) |
+| daily `*.limit` | Number, or `null` when Pro has no hard daily cap |
 
 ## Message object
 

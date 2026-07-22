@@ -7,11 +7,11 @@ This repository is the **public install mirror**. Skill content is authored in t
 ## Install
 
 ```bash
-npx skills add zaru/chobitmail-skills
+npx skills add chobitapp/chobitmail-skills
 # or pin the skill name
-npx skills add zaru/chobitmail-skills --skill chobitmail
+npx skills add chobitapp/chobitmail-skills --skill chobitmail
 # global (all projects)
-npx skills add zaru/chobitmail-skills --skill chobitmail -g -y
+npx skills add chobitapp/chobitmail-skills --skill chobitmail -g -y
 ```
 
 After install, ask your coding agent to write Playwright/Vitest flows that need signup OTP, magic links, or password-reset email.

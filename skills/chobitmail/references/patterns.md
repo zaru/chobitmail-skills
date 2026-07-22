@@ -8,48 +8,50 @@ export CHOBITMAIL_API_KEY=cbm_live_...
 # export CHOBITMAIL_BASE_URL=http://localhost:8787
 ```
 
-## Playwright — OTP signup
+## Playwright — preferred package
 
-```js
-import { test, expect } from "@playwright/test";
-import { createInbox, waitForMessage } from "./chobitmail";
+```bash
+pnpm add -D @chobitmail/playwright
+export CHOBITMAIL_API_KEY=cbm_live_...
+```
 
-test("email OTP signup", async ({ page }) => {
-  const inbox = await createInbox(600);
+```ts
+import { test, expect } from "@chobitmail/playwright";
 
+test("email OTP signup", async ({ page, inbox }) => {
   await page.goto("https://app.example/signup");
   await page.getByLabel("Email").fill(inbox.address);
   await page.getByRole("button", { name: /sign up|register/i }).click();
 
-  const message = await waitForMessage(
-    inbox.id,
-    { subject: "verification" },
-    90_000,
+  const code = await inbox.waitForCode(
+    { subject: "verification", timeout: 90_000 },
   );
-  expect(message.codes.length).toBeGreaterThan(0);
-
-  await page.getByLabel(/code|otp/i).fill(message.codes[0]);
+  await page.getByLabel(/code|otp/i).fill(code);
   await page.getByRole("button", { name: /verify|continue/i }).click();
   await expect(page.getByText(/welcome|dashboard/i)).toBeVisible();
 });
 ```
 
-## Playwright — click magic / verify link
-
-```js
-test("verify email link", async ({ page }) => {
-  const inbox = await createInbox();
+```ts
+test("verify email link", async ({ page, inbox }) => {
   // ... trigger app to send verification email ...
-
-  const message = await waitForMessage(inbox.id, { subject: "Verify" });
-  const link =
-    message.links.find((u) => u.includes("/verify")) ?? message.links[0];
-  if (!link) throw new Error("no verification link in message");
-
+  const link = await inbox.waitForLink({
+    subject: "Verify",
+    includes: "/verify",
+  });
   await page.goto(link);
   await expect(page.getByText(/verified|success/i)).toBeVisible();
 });
 ```
+
+- Fixture auto-deletes the inbox after each test (frees free-tier concurrent slot).
+- `waitForCode` / `waitForLink` are **fail-fast** on the first matching message (they do not skip to a later email).
+- Free tier: concurrent **1**, daily create/message **5** — use `workers: 1`, avoid sharing one key across CI shards.
+- Cypress is not supported.
+
+## Playwright — copy-paste helpers (fallback)
+
+If you cannot add the package yet, use the helpers from `SKILL.md` (`createInbox`, `waitForMessage`).
 
 When multiple links appear (unsubscribe, tracking, CTA), filter by path/host — do not always take `[0]`.
 
